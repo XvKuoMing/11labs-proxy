@@ -16,8 +16,10 @@ else:
 
 load_dotenv()
 
+
+api_key = os.getenv("API_KEY")
 client = ElevenLabs(
-    api_key=os.getenv("API_KEY")
+    api_key=api_key
 )
 
 app = FastAPI(title="ElevenLabs Proxy", description="Proxy server for ElevenLabs API")
@@ -123,7 +125,7 @@ if __name__ == "__main__":
     workers = int(os.getenv("WORKERS", "1"))
     logger.info(f"Starting server on {host}:{port}")
     uvicorn.run(
-        app,
+        "main:app",
         host=host,
         port=port,
         reload=True,  # Auto-reload on code changes
