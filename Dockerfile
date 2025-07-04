@@ -1,37 +1,13 @@
-# Use Python 3.11 slim image as base
-FROM python:3.11-slim
+FROM python:3.12-slim-bookworm
+# using uv to install dependencies
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Set working directory
+# Copy the project into the image
+ADD . /app
+
+# Sync the project into a new environment, asserting the lockfile is up to date
 WORKDIR /app
-
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy project files
-COPY pyproject.toml ./
-COPY uv.lock ./
-
-# Install uv for faster dependency installation (optional, fallback to pip)
-RUN pip install uv
-
-# Install Python dependencies
-RUN uv sync --no-dev
-
-# Copy application code
-COPY . .
-
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash app && \
-    chown -R app:app /app
-USER app
+RUN uv sync --locked
 
 # Default command
-CMD ["python", "main.py"] 
+CMD ["uv", "run", "main.py"] 

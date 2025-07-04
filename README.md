@@ -1,168 +1,194 @@
 # ElevenLabs Proxy Server
 
-A FastAPI-based proxy server that mimics ElevenLabs API endpoints, allowing you to use your own server as a proxy for ElevenLabs text-to-speech conversion.
+A high-performance FastAPI-based proxy server for the ElevenLabs text-to-speech API. This proxy provides a simple interface for converting text to speech with support for multiple audio formats and streaming capabilities.
 
-## Features
+## 🚀 Features
 
-- ✅ **Complete ElevenLabs API Coverage**: All 4 text-to-speech endpoints
-  - `/v1/text-to-speech/{voice_id}` - Basic conversion
-  - `/v1/text-to-speech/{voice_id}/with-timestamps` - With character-level timing
-  - `/v1/text-to-speech/{voice_id}/stream` - Streaming audio
-  - `/v1/text-to-speech/{voice_id}/stream/with-timestamps` - Streaming with timing
-- ✅ **All ElevenLabs Parameters**: Voice settings, pronunciation dictionaries, seeds, etc.
-- ✅ **All Output Formats**: MP3, PCM, μ-law, A-law, Opus (19 total formats)
-- ✅ **Advanced Features**: Latency optimization, text normalization, language enforcement
-- ✅ **Server-side API Key**: Clients don't need API keys
-- ✅ **FastAPI with OpenAPI**: Automatic documentation and validation
-- ✅ **Comprehensive Testing**: Full test suite included
+- **FastAPI Framework**: High-performance async API server
+- **Multiple Audio Formats**: Support for MP3, PCM, ULAW, ALAW, and OPUS formats
+- **Streaming Support**: Real-time audio streaming capabilities
+- **Docker Ready**: Containerized deployment with Docker Compose
+- **Health Checks**: Built-in health monitoring endpoints
+- **Environment Configuration**: Flexible configuration via environment variables
+- **Production Ready**: Non-root user execution and security best practices
 
-## Setup
+## 📋 Supported Audio Formats
 
-1. **Install dependencies:**
+- **MP3**: `mp3_22050_32`, `mp3_44100_32`, `mp3_44100_64`, `mp3_44100_96`, `mp3_44100_128`, `mp3_44100_192`
+- **PCM**: `pcm_8000`, `pcm_16000`, `pcm_22050`, `pcm_24000`, `pcm_44100`, `pcm_48000`
+- **ULAW/ALAW**: `ulaw_8000`, `alaw_8000`
+- **OPUS**: `opus_48000_32`, `opus_48000_64`, `opus_48000_96`, `opus_48000_128`, `opus_48000_192`
+
+## 🛠️ Setup
+
+### Prerequisites
+
+- Python 3.11+
+- ElevenLabs API key
+- Docker (optional, for containerized deployment)
+
+### Local Development
+
+1. **Clone the repository**
    ```bash
-   pip install -e .
+   git clone <repository-url>
+   cd 11px
    ```
 
-2. **Set up environment variables:**
+2. **Install dependencies with UV** (recommended)
+   ```bash
+   pip install uv
+   uv sync
+   ```
+
+   Or with pip:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Set up environment variables**
    Create a `.env` file in the project root:
    ```env
-   API_KEY=your_elevenlabs_api_key_here
-   VOICE=your_default_voice_id
-   MODEL=eleven_multilingual_v2
+   API_KEY=your_elevenlabs_api_key
+   HOST=0.0.0.0
+   PORT=8000
+   WORKERS=1
+   DEBUG=false
    ```
 
-3. **Run the server:**
+4. **Run the server**
    ```bash
-   python run_server.py
+   python main.py
    ```
-   
-   Or manually with uvicorn:
+
+### Docker Deployment
+
+1. **Create environment file**
    ```bash
-   uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+   cp .env.example .env
+   # Edit .env with your configuration
    ```
 
-## Usage
+2. **Start with Docker Compose**
+   ```bash
+   docker-compose up -d
+   ```
 
-### Original ElevenLabs API call:
-```bash
-curl -X POST "https://api.elevenlabs.io/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb?output_format=mp3_44100_128" \
-     -H "xi-api-key: your_api_key" \
-     -H "Content-Type: application/json" \
-     -d '{
-  "text": "The first move is what sets everything in motion.",
-  "model_id": "eleven_multilingual_v2"
-}'
+3. **Check health**
+   ```bash
+   curl http://localhost:8000/ping
+   ```
+
+## 📚 API Usage
+
+### Base URL
+```
+http://localhost:8000
 ```
 
-### Using your proxy:
+### Endpoints
+
+#### Health Check
 ```bash
-curl -X POST "http://localhost:8000/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb?output_format=mp3_44100_128" \
-     -H "Content-Type: application/json" \
-     -d '{
-  "text": "The first move is what sets everything in motion.",
-  "model_id": "eleven_multilingual_v2"
-}' \
-     --output speech.mp3
+GET /ping
+```
+Returns: `{"ping": "pong"}`
+
+#### Text to Speech
+```bash
+POST /v1/text-to-speech/{voice_id}
 ```
 
-### Python client example:
-```python
-import requests
-
-url = "http://localhost:8000/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb"
-params = {"output_format": "mp3_44100_128"}
-payload = {
-    "text": "Hello, world!",
-    "model_id": "eleven_multilingual_v2"
+**Request Body:**
+```json
+{
+  "text": "Hello, world!",
+  "output_format": "mp3_44100_128",
+  "model_id": "eleven_multilingual_v2"
 }
-
-response = requests.post(url, json=payload, params=params)
-with open("speech.mp3", "wb") as f:
-    f.write(response.content)
 ```
 
-### Test the proxy:
+**Example:**
 ```bash
-# Basic tests
-python proxy_test.py
-
-# Comprehensive test suite (all endpoints and features)
-python enhanced_proxy_test.py
+curl -X POST "http://localhost:8000/v1/text-to-speech/YOUR_VOICE_ID" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Hello, this is a test message.",
+    "output_format": "mp3_44100_128"
+  }' \
+  --output audio.mp3
 ```
 
-## API Endpoints
+#### Streaming Text to Speech
+```bash
+POST /v1/text-to-speech/{voice_id}/stream
+```
 
-### Text-to-Speech Endpoints
-- `POST /v1/text-to-speech/{voice_id}` - Basic text-to-speech conversion
-- `POST /v1/text-to-speech/{voice_id}/with-timestamps` - TTS with character-level timing
-- `POST /v1/text-to-speech/{voice_id}/stream` - Streaming audio generation
-- `POST /v1/text-to-speech/{voice_id}/stream/with-timestamps` - Streaming with timestamps
+Same request format as above, but returns a streaming response for real-time audio playback.
 
-### Utility Endpoints
-- `GET /` - Root endpoint with server info
-- `GET /health` - Health check
-- `GET /docs` - API documentation (Swagger UI)
-- `GET /v1/text-to-speech/endpoints` - List all supported endpoints and formats
+### Parameters
 
-## Parameters
+- `voice_id`: ElevenLabs voice ID
+- `text`: Text to convert to speech
+- `output_format`: Audio format (see supported formats above)
+- `model_id`: ElevenLabs model ID (optional)
 
-### Path Parameters
-- **voice_id**: ElevenLabs voice ID
+## 🔧 Configuration
 
-### Query Parameters
-- **output_format**: Audio format (default: mp3_44100_128)
-- **enable_logging**: Enable/disable logging (optional)
-- **optimize_streaming_latency**: Latency optimization level 0-4 (optional)
+### Environment Variables
 
-### Request Body Parameters
-- **text**: Text to convert to speech (required)
-- **model_id**: ElevenLabs model ID (default: eleven_multilingual_v2)
-- **language_code**: ISO 639-1 language code (optional)
-- **voice_settings**: Voice settings object (optional)
-  - **stability**: 0.0-1.0 (optional)
-  - **similarity_boost**: 0.0-1.0 (optional)  
-  - **style**: 0.0-1.0 (optional)
-  - **use_speaker_boost**: boolean (optional)
-- **pronunciation_dictionary_locators**: Array of pronunciation dictionaries (optional)
-- **seed**: Random seed 0-4294967295 for deterministic output (optional)
-- **previous_text**: Context from previous generation (optional)
-- **next_text**: Context for next generation (optional)
-- **previous_request_ids**: Array of previous request IDs for continuity (optional)
-- **next_request_ids**: Array of next request IDs for continuity (optional)
-- **use_pvc_as_ivc**: Use IVC instead of PVC voice version (optional)
-- **apply_text_normalization**: "auto", "on", or "off" (optional)
-- **apply_language_text_normalization**: Enable language-specific normalization (optional)
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `API_KEY` | ElevenLabs API key | Required |
+| `HOST` | Server host | `0.0.0.0` |
+| `PORT` | Server port | `8000` |
+| `WORKERS` | Number of worker processes | `1` |
+| `DEBUG` | Enable debug logging | `false` |
 
-## Supported Output Formats
+## 🐳 Docker Configuration
 
-All ElevenLabs supported formats are available:
+The application includes:
+- **Multi-stage build** for optimized image size
+- **Non-root user** for security
+- **Health checks** for monitoring
+- **UV package manager** for faster dependency installation
+- **Network host mode** for optimal performance
 
-### MP3 Formats
-- `mp3_22050_32`, `mp3_44100_32`, `mp3_44100_64`, `mp3_44100_96`, `mp3_44100_128`, `mp3_44100_192`
+## 🧪 Testing
 
-### PCM Formats  
-- `pcm_8000`, `pcm_16000`, `pcm_22050`, `pcm_24000`, `pcm_44100`, `pcm_48000`
+Run the test suite:
+```bash
+python test.py
+```
 
-### μ-law and A-law Formats (commonly used for telephony)
-- `ulaw_8000`, `alaw_8000`
+## 📝 Logging
 
-### Opus Formats
-- `opus_48000_32`, `opus_48000_64`, `opus_48000_96`, `opus_48000_128`, `opus_48000_192`
+The application includes structured logging with configurable levels:
+- Production: INFO level
+- Development: DEBUG level (set `DEBUG=true`)
 
-**Note:** Some formats require specific ElevenLabs subscription tiers:
-- MP3 192kbps: Creator tier or above
-- PCM 44.1kHz: Pro tier or above
+## 🔒 Security Features
 
-## Benefits of Using a Proxy
+- Non-root container execution
+- Environment-based configuration
+- Input validation for audio formats
+- Error handling with appropriate HTTP status codes
 
-1. **API Key Security**: Your ElevenLabs API key stays on your server
-2. **Rate Limiting**: Implement your own rate limiting logic
-3. **Logging**: Track usage and requests
-4. **Caching**: Cache frequently requested audio (future feature)
-5. **Custom Logic**: Add preprocessing or postprocessing of text/audio
+## 🤝 Contributing
 
-## Development
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
-- The server runs with auto-reload enabled for development
-- Visit `http://localhost:8000/docs` for interactive API documentation
-- Check `http://localhost:8000/health` to verify the server is running
+## 📄 License
+
+[Add your license information here]
+
+## 🆘 Support
+
+For issues and questions:
+1. Check the [Issues](../../issues) page
+2. Review the ElevenLabs API documentation
+3. Ensure your API key is valid and has sufficient credits
