@@ -5,7 +5,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: elevenlabs-proxy
-    network_mode: host
+    # network_mode: host
+    ports:
+      - ${PORT}:${PORT}
     environment:
       - DEBUG=${DEBUG}
       - HOST=${HOST}
