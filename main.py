@@ -179,16 +179,16 @@ async def audio_speech(request: OpenaiT2SRequest, auth: str = Depends(verify_ope
     try:
         # Debug logging for voice parameter
         logger.debug(f"Received TTS request - Voice: '{request.voice}', Model: '{request.model}', Input length: {len(request.input)}")
-        logger.debug(f"Voice after strip: '{request.voice.strip('\"')}'")
         logger.debug(f"Response format: '{request.response_format}', Stream format: '{request.stream_format}'")
         
         if request.instructions:
             # ignore it for 11labs
             pass
         if request.stream_format == "audio": #
-            logger.info(f"Converting TTS with voice_id: '{request.voice.strip('\"')}'")
+            voice_id = request.voice.strip("\"'")
+            logger.info(f"Converting TTS with voice_id: '{voice_id}'")
             audio = client.text_to_speech.convert(
-                voice_id=request.voice.strip("'\""),
+                voice_id=voice_id,
                 text=request.input,
                 model_id=request.model,
                 output_format=request.response_format,
@@ -210,9 +210,10 @@ async def audio_speech(request: OpenaiT2SRequest, auth: str = Depends(verify_ope
         elif request.stream_format == "sse":
             def generate_sse_stream() -> Generator[str, None, None]:
                 try:
-                    logger.info(f"Streaming TTS with voice_id: '{request.voice.strip('\"')}'")
+                    voice_id = request.voice.strip("\"'")
+                    logger.info(f"Streaming TTS with voice_id: '{voice_id}'")
                     audio_stream = client.text_to_speech.stream(
-                        voice_id=request.voice.strip("'\""),
+                        voice_id=voice_id,
                         text=request.input,
                         model_id=request.model,
                         output_format=request.response_format,
