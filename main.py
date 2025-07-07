@@ -1,8 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from elevenlabs import ElevenLabs
+from pydantic import BaseModel
+import base64
+import json
 from dotenv import load_dotenv
-from typing import Dict, Any
+from typing import Dict, Any, Generator, Optional
 import os
 import logging
 
@@ -24,6 +28,28 @@ client = ElevenLabs(
 
 app = FastAPI(title="ElevenLabs Proxy", description="Proxy server for ElevenLabs API")
 
+# Authentication dependencies
+security = HTTPBearer()
+
+async def verify_openai_auth(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Verify OpenAI Bearer token authentication"""
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    
+    if credentials.credentials != api_key:
+        raise HTTPException(status_code=403, detail="Invalid API key")
+    
+    return credentials.credentials
+
+async def verify_elevenlabs_auth(xi_api_key: Optional[str] = Header(None, alias="xi-api-key")):
+    """Verify ElevenLabs xi-api-key header authentication"""
+    if not api_key:
+        raise HTTPException(status_code=500, detail="ElevenLabs API key not configured")
+    
+    if not xi_api_key or xi_api_key != api_key:
+        raise HTTPException(status_code=403, detail="Invalid API key")
+    
+    return xi_api_key
 
 AUDIO_FORMATS = [
     "mp3_22050_32",
@@ -59,8 +85,10 @@ def get_media_type_and_extension(output_format: str) -> tuple[str, str]:
     else:
         raise ValueError(f"Invalid output format: {output_format}")
 
+# ElevenLabs API
+
 @app.post("/v1/text-to-speech/{voice_id}")
-async def text_to_speech(voice_id: str, request: Dict[str, Any]):
+async def text_to_speech(voice_id: str, request: Dict[str, Any], auth: str = Depends(verify_elevenlabs_auth)):
     try:
         audio = client.text_to_speech.convert(
             voice_id=voice_id,
@@ -85,7 +113,7 @@ async def text_to_speech(voice_id: str, request: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/v1/text-to-speech/{voice_id}/stream")
-async def text_to_speech_stream(voice_id: str, request: Dict[str, Any]):
+async def text_to_speech_stream(voice_id: str, request: Dict[str, Any], auth: str = Depends(verify_elevenlabs_auth)):
     try:
         audio_stream = client.text_to_speech.stream(
             voice_id=voice_id,
@@ -108,6 +136,102 @@ async def text_to_speech_stream(voice_id: str, request: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Error converting text to speech: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# OpenAI API
+class OpenaiT2SRequest(BaseModel):
+    model: str
+    input: str
+    voice: str
+    response_format: str
+    instructions: str = None
+    speed: float = 1.0
+    stream_format: str = "audio" # or sse for streaming
+
+
+@app.post("/v1/audio/speech")
+async def audio_speech(request: OpenaiT2SRequest, auth: str = Depends(verify_openai_auth)):
+    try:
+        if request.instructions:
+            # ignore it for 11labs
+            pass
+        if request.stream_format == "audio": #
+            audio = client.text_to_speech.convert(
+                voice_id=request.voice,
+                text=request.input,
+                model_id=request.model,
+                output_format=request.response_format,
+                voice_settings={
+                    "speed": request.speed
+                }
+            )
+            media_type, extension = get_media_type_and_extension(request.response_format)
+            logger.info(f"Output format: {request.response_format}, Media type: {media_type}, Extension: {extension}")
+            return StreamingResponse(
+                audio,
+                media_type=media_type,
+                headers={
+                    "Content-Disposition": f"attachment; filename=audio.{extension}"
+                }
+            )
+        elif request.stream_format == "sse":
+            def generate_sse_stream() -> Generator[str, None, None]:
+                try:
+                    audio_stream = client.text_to_speech.stream(
+                        voice_id=request.voice,
+                        text=request.input,
+                        model_id=request.model,
+                        output_format=request.response_format,
+                        voice_settings={
+                            "speed": request.speed
+                        }
+                    )
+                    
+                    # Stream audio chunks
+                    for audio_chunk in audio_stream:
+                        sse_chunk = {
+                            "type": "speech.audio.delta",
+                            "audio": base64.b64encode(audio_chunk).decode("utf-8")
+                        }
+                        yield f"data: {json.dumps(sse_chunk)}\n\n"
+                    
+                    # Send completion event
+                    audio_done = {
+                        "type": "speech.audio.done",
+                        "usage": {
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "total_tokens": 0
+                        }
+                    }
+                    yield f"data: {json.dumps(audio_done)}\n\n"
+                    
+                except Exception as e:
+                    error_event = {
+                        "type": "error",
+                        "error": {
+                            "message": str(e),
+                            "type": "server_error"
+                        }
+                    }
+                    yield f"data: {json.dumps(error_event)}\n\n"
+            
+            return StreamingResponse(
+                generate_sse_stream(), 
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no"  # Disable nginx buffering
+                })
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid stream format: {request.stream_format}")
+    except Exception as e:
+        logger.error(f"Error converting text to speech: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Proxy API
 
 @app.get("/")
 async def root():

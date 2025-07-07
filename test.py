@@ -9,7 +9,7 @@ host = os.getenv("HOST")
 port = os.getenv("PORT")
 
 client = ElevenLabs(
-    base_url=f"http://{host}:{port}",
+    base_url=f"https://{host}:{port}",
     api_key=os.getenv("API_KEY")
 )
 
