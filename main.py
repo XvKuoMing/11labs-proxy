@@ -91,7 +91,7 @@ def get_media_type_and_extension(output_format: str) -> tuple[str, str]:
 async def text_to_speech(voice_id: str, request: Dict[str, Any], auth: str = Depends(verify_elevenlabs_auth)):
     try:
         audio = client.text_to_speech.convert(
-            voice_id=voice_id,
+            voice_id=voice_id.strip("'\""),
             **request
         )
         
@@ -116,7 +116,7 @@ async def text_to_speech(voice_id: str, request: Dict[str, Any], auth: str = Dep
 async def text_to_speech_stream(voice_id: str, request: Dict[str, Any], auth: str = Depends(verify_elevenlabs_auth)):
     try:
         audio_stream = client.text_to_speech.stream(
-            voice_id=voice_id,
+            voice_id=voice_id.strip("'\""),
             **request
         )
         
@@ -157,7 +157,7 @@ async def audio_speech(request: OpenaiT2SRequest, auth: str = Depends(verify_ope
             pass
         if request.stream_format == "audio": #
             audio = client.text_to_speech.convert(
-                voice_id=request.voice,
+                voice_id=request.voice.strip("'\""),
                 text=request.input,
                 model_id=request.model,
                 output_format=request.response_format,
@@ -178,7 +178,7 @@ async def audio_speech(request: OpenaiT2SRequest, auth: str = Depends(verify_ope
             def generate_sse_stream() -> Generator[str, None, None]:
                 try:
                     audio_stream = client.text_to_speech.stream(
-                        voice_id=request.voice,
+                        voice_id=request.voice.strip("'\""),
                         text=request.input,
                         model_id=request.model,
                         output_format=request.response_format,
