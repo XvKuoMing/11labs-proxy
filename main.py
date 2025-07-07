@@ -106,7 +106,7 @@ def get_media_type_and_extension(output_format: str) -> tuple[str, str]:
 @app.post("/v1/text-to-speech/{voice_id}")
 async def text_to_speech(voice_id: str, request: Dict[str, Any], auth: str = Depends(verify_elevenlabs_auth)):
     try:
-        audio = client.text_to_speech.convert(
+        audio = client.text_to_speech.stream(
             voice_id=voice_id.strip("'\""),
             **request
         )
@@ -261,6 +261,39 @@ async def audio_speech(request: OpenaiT2SRequest, auth: str = Depends(verify_ope
                 })
         else:
             raise HTTPException(status_code=400, detail=f"Invalid stream format: {request.stream_format}")
+    except Exception as e:
+        logger.error(f"Error converting text to speech: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/v1/audio/speech/stream")
+async def audio_speech_stream(request: OpenaiT2SRequest, auth: str = Depends(verify_openai_auth)):
+    try:
+        if request.instructions:
+            # ignore it for 11labs
+            pass
+        voice_id = request.voice.strip("\"'")
+        logger.info(f"Converting TTS with voice_id: '{voice_id}'")
+        audio_stream = client.text_to_speech.stream(
+            voice_id=voice_id,
+            text=request.input,
+            model_id=request.model,
+            output_format=request.response_format,
+            voice_settings={
+                "speed": request.speed
+            }
+        )
+        media_type, extension = get_media_type_and_extension(request.response_format)
+        logger.info(f"Output format: {request.response_format}, Media type: {media_type}, Extension: {extension}")
+        return StreamingResponse(
+            audio_stream,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f"attachment; filename=audio.{extension}",
+                "Transfer-Encoding": "chunked",
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no"  # Disable nginx buffering for true streaming
+            }
+        )
     except Exception as e:
         logger.error(f"Error converting text to speech: {e}")
         raise HTTPException(status_code=500, detail=str(e))
