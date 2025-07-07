@@ -12,14 +12,30 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Configure logging with handler
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+
 debug = os.getenv("DEBUG", "false").lower() == "true"
 if debug:
     logger.setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.DEBUG)
 else:
     logger.setLevel(logging.INFO)
+    logging.getLogger().setLevel(logging.INFO)
 
 load_dotenv()
 
+# Debug environment variables
+logger.debug("Environment variables loaded:")
+logger.debug(f"HOST: {os.getenv('HOST')}")
+logger.debug(f"PORT: {os.getenv('PORT')}")
+logger.debug(f"API_KEY: {'***' + str(os.getenv('API_KEY'))[-4:] if os.getenv('API_KEY') else 'None'}")
+logger.debug(f"VOICE: {os.getenv('VOICE', 'Not set')}")
+logger.debug(f"MODEL: {os.getenv('MODEL', 'Not set')}")
 
 api_key = os.getenv("API_KEY")
 client = ElevenLabs(
@@ -106,7 +122,11 @@ async def text_to_speech(voice_id: str, request: Dict[str, Any], auth: str = Dep
         
         return StreamingResponse(
             audio,
-            media_type=media_type
+            media_type=media_type,
+            headers={
+                "Connection": "close",  # Ensure connection closes after response
+                "Cache-Control": "no-cache",
+            }
         )
     except Exception as e:
         logger.error(f"Error converting text to speech: {e}")
@@ -115,6 +135,7 @@ async def text_to_speech(voice_id: str, request: Dict[str, Any], auth: str = Dep
 @app.post("/v1/text-to-speech/{voice_id}/stream")
 async def text_to_speech_stream(voice_id: str, request: Dict[str, Any], auth: str = Depends(verify_elevenlabs_auth)):
     try:
+        logger.debug(f"Received TTS request - Voice: '{voice_id}', Request: {request}")
         audio_stream = client.text_to_speech.stream(
             voice_id=voice_id.strip("'\""),
             **request
@@ -131,7 +152,11 @@ async def text_to_speech_stream(voice_id: str, request: Dict[str, Any], auth: st
         
         return StreamingResponse(
             audio_stream,
-            media_type=media_type
+            media_type=media_type,
+            headers={
+                "Connection": "close",  # Ensure connection closes after response
+                "Cache-Control": "no-cache",
+            }
         )
     except Exception as e:
         logger.error(f"Error converting text to speech: {e}")
@@ -152,10 +177,16 @@ class OpenaiT2SRequest(BaseModel):
 @app.post("/v1/audio/speech")
 async def audio_speech(request: OpenaiT2SRequest, auth: str = Depends(verify_openai_auth)):
     try:
+        # Debug logging for voice parameter
+        logger.debug(f"Received TTS request - Voice: '{request.voice}', Model: '{request.model}', Input length: {len(request.input)}")
+        logger.debug(f"Voice after strip: '{request.voice.strip('\"')}'")
+        logger.debug(f"Response format: '{request.response_format}', Stream format: '{request.stream_format}'")
+        
         if request.instructions:
             # ignore it for 11labs
             pass
         if request.stream_format == "audio": #
+            logger.info(f"Converting TTS with voice_id: '{request.voice.strip('\"')}'")
             audio = client.text_to_speech.convert(
                 voice_id=request.voice.strip("'\""),
                 text=request.input,
@@ -171,12 +202,15 @@ async def audio_speech(request: OpenaiT2SRequest, auth: str = Depends(verify_ope
                 audio,
                 media_type=media_type,
                 headers={
-                    "Content-Disposition": f"attachment; filename=audio.{extension}"
+                    "Content-Disposition": f"attachment; filename=audio.{extension}",
+                    "Connection": "close",  # Ensure connection closes after response
+                    "Cache-Control": "no-cache",
                 }
             )
         elif request.stream_format == "sse":
             def generate_sse_stream() -> Generator[str, None, None]:
                 try:
+                    logger.info(f"Streaming TTS with voice_id: '{request.voice.strip('\"')}'")
                     audio_stream = client.text_to_speech.stream(
                         voice_id=request.voice.strip("'\""),
                         text=request.input,
@@ -253,6 +287,6 @@ if __name__ == "__main__":
         host=host,
         port=port,
         reload=True,  # Auto-reload on code changes
-        log_level="debug" if debug else "info",
+        # log_level="debug" if debug else "info",
         workers=workers
     ) 
