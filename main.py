@@ -184,6 +184,14 @@ async def audio_speech(request: OpenaiT2SRequest, auth: str = Depends(verify_ope
         if request.instructions:
             # ignore it for 11labs
             pass
+        
+        try:
+            voice = client.voices.get(voice_id)
+            logger.info(f"Voice: {voice}")
+        except Exception as e:
+            logger.error(f"Error getting voice: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid voice: {voice_id}")
+        
         if request.stream_format == "audio": #
             voice_id = request.voice.strip("\"'")
             logger.info(f"Converting TTS with voice_id: '{voice_id}'")
@@ -272,8 +280,13 @@ async def audio_speech_stream(request: OpenaiT2SRequest, auth: str = Depends(ver
             # ignore it for 11labs
             pass
         voice_id = request.voice.strip("\"'")
-        # voice = client.voices.get(voice_id)
-        # logger.info(f"Voice: {voice}")
+        try:
+            voice = client.voices.get(voice_id)
+            logger.info(f"Voice: {voice}")
+        except Exception as e:
+            logger.error(f"Error getting voice: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid voice: {voice_id}")
+        
         logger.info(f"Converting TTS with voice_id: '{voice_id}'")
         audio_stream = client.text_to_speech.stream(
             voice_id=voice_id,
