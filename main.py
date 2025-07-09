@@ -272,6 +272,8 @@ async def audio_speech_stream(request: OpenaiT2SRequest, auth: str = Depends(ver
             # ignore it for 11labs
             pass
         voice_id = request.voice.strip("\"'")
+        # voice = client.voices.get(voice_id)
+        # logger.info(f"Voice: {voice}")
         logger.info(f"Converting TTS with voice_id: '{voice_id}'")
         audio_stream = client.text_to_speech.stream(
             voice_id=voice_id,
