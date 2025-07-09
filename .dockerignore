@@ -5,3 +5,5 @@ __pycache__
 test*py
 *logs
 *pid
+*wav
+test*py
